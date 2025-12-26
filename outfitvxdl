@@ -1,0 +1,317 @@
+-- CLIENT SCRIPT
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- 1. Wait for the RemoteEvent to exist
+local outfitRemote = ReplicatedStorage:WaitForChild("RequestOutfitChange")
+
+-- 2. Create a Simple GUI for testing
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = playerGui
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 200, 0, 150)
+frame.Position = UDim2.new(0, 20, 0.5, -75)
+frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+frame.Parent = screenGui
+
+local idInput = Instance.new("TextBox")
+idInput.Size = UDim2.new(0.9, 0, 0, 40)
+idInput.Position = UDim2.new(0.05, 0, 0.1, 0)
+idInput.PlaceholderText = "Asset ID (Number)"
+idInput.Parent = frame
+
+local typeInput = Instance.new("TextBox")
+typeInput.Size = UDim2.new(0.9, 0, 0, 40)
+typeInput.Position = UDim2.new(0.05, 0, 0.4, 0)
+typeInput.PlaceholderText = "Type (Shirt/Pants)"
+typeInput.Parent = frame
+
+local applyBtn = Instance.new("TextButton")
+applyBtn.Size = UDim2.new(0.9, 0, 0, 40)
+applyBtn.Position = UDim2.new(0.05, 0, 0.7, 0)
+applyBtn.Text = "Send to Server"
+applyBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+applyBtn.Parent = frame
+
+-- 3. Function to Fire the Remote
+applyBtn.MouseButton1Click:Connect(function()
+	local id = tonumber(idInput.Text)
+	local clothingType = typeInput.Text -- Must be "Shirt" or "Pants" (Case sensitive in this script)
+
+	if id and clothingType then
+		print("Sending request to server...")
+		-- FIRE SERVER: This sends the data across the boundary
+		outfitRemote:FireServer(id, clothingType)
+	else
+		warn("Please enter a valid Number ID and Type (Shirt/Pants)")
+	end
+end)
+
+-- SERVER SCRIPT (OutfitHandler)
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+
+-- 1. Create the RemoteEvent automatically
+local remoteName = "RequestOutfitChange"
+local outfitRemote = ReplicatedStorage:FindFirstChild(remoteName)
+
+if not outfitRemote then
+	outfitRemote = Instance.new("RemoteEvent")
+	outfitRemote.Name = remoteName
+	outfitRemote.Parent = ReplicatedStorage
+end
+
+-- 2. Function to handle the request
+local function onChangeRequest(player, assetId, assetType)
+	-- VALIDATION: Check if data types are correct to prevent errors
+	if type(assetId) ~= "number" or type(assetType) ~= "string" then
+		warn(player.Name .. " sent invalid data.")
+		return
+	end
+
+	local character = player.Character
+	if not character then return end
+	
+	local humanoid = character:FindFirstChild("Humanoid")
+	if not humanoid then return end
+
+	-- 3. Apply the Change
+	-- We use pcall (Protected Call) in case the Asset ID is invalid or deleted
+	local success, err = pcall(function()
+		-- Get current description
+		local currentDescription = humanoid:GetAppliedDescription()
+
+		-- Modify based on type
+		if assetType == "Shirt" then
+			currentDescription.Shirt = assetId
+		elseif assetType == "Pants" then
+			currentDescription.Pants = assetId
+		elseif assetType == "Face" then
+			currentDescription.Face = assetId
+		end
+
+		-- Apply the new description (Server-side, so it replicates to everyone)
+		humanoid:ApplyDescription(currentDescription)
+	end)
+
+	if success then
+		print("Successfully changed outfit for: " .. player.Name)
+	else
+		warn("Failed to apply outfit: " .. err)
+	end
+end
+
+-- 4. Connect the listener
+outfitRemote.OnServerEvent:Connect(onChangeRequest)
+
+--[[
+    ADVANCED CATALOG POCKET - "THE SPECIAL SCRIPT"
+    Features: 
+    1. Real-time Catalog Fetching (AvatarEditorService)
+    2. Visual Grid Layout
+    3. One-Click Try On
+    4. Draggable UI
+    
+    Setup: Put this in StarterPlayerScripts as a LocalScript.
+]]
+
+local Players = game:GetService("Players")
+local AvatarEditorService = game:GetService("AvatarEditorService")
+local CoreGui = game:GetService("CoreGui") -- Use PlayerGui if CoreGui is restricted
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- // 1. UI CONSTRUCTION //
+-- We build the UI via script so you don't have to manualy make it
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "SpecialCatalogUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = playerGui
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 450, 0, 500)
+MainFrame.Position = UDim2.new(0.5, -225, 0.5, -250) -- Center
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+MainFrame.BorderSizePixel = 0
+MainFrame.ClipsDescendants = true
+MainFrame.Parent = ScreenGui
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 12)
+UICorner.Parent = MainFrame
+
+-- Header (Draggable Area)
+local Header = Instance.new("Frame")
+Header.Size = UDim2.new(1, 0, 0, 50)
+Header.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+Header.BorderSizePixel = 0
+Header.Parent = MainFrame
+
+local Title = Instance.new("TextLabel")
+Title.Text = "✨ CATALOG POCKET"
+Title.Size = UDim2.new(1, -50, 1, 0)
+Title.Position = UDim2.new(0, 20, 0, 0)
+Title.BackgroundTransparency = 1
+Title.Font = Enum.Font.GothamBlack
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 20
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = Header
+
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Text = "X"
+CloseBtn.Size = UDim2.new(0, 50, 1, 0)
+CloseBtn.Position = UDim2.new(1, -50, 0, 0)
+CloseBtn.BackgroundTransparency = 1
+CloseBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.TextSize = 18
+CloseBtn.Parent = Header
+
+-- Scrolling Grid Area
+local ScrollFrame = Instance.new("ScrollingFrame")
+ScrollFrame.Size = UDim2.new(1, -20, 1, -70)
+ScrollFrame.Position = UDim2.new(0, 10, 0, 60)
+ScrollFrame.BackgroundTransparency = 1
+ScrollFrame.ScrollBarThickness = 6
+ScrollFrame.Parent = MainFrame
+
+local GridLayout = Instance.new("UIGridLayout")
+GridLayout.CellSize = UDim2.new(0, 100, 0, 130)
+GridLayout.CellPadding = UDim2.new(0, 10, 0, 10)
+GridLayout.Parent = ScrollFrame
+
+-- // 2. FUNCTIONALITY: FETCH CATALOG //
+
+local function createItemCard(assetId, name)
+	local Card = Instance.new("TextButton")
+	Card.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+	Card.Text = ""
+	Card.Parent = ScrollFrame
+	
+	local Corner = Instance.new("UICorner")
+	Corner.CornerRadius = UDim.new(0, 8)
+	Corner.Parent = Card
+	
+	-- Image
+	local Image = Instance.new("ImageLabel")
+	Image.Size = UDim2.new(1, 0, 0, 100)
+	Image.BackgroundTransparency = 1
+	Image.Image = "rbxthumb://type=Asset&id=" .. assetId .. "&w=150&h=150"
+	Image.Parent = Card
+	
+	-- Name
+	local NameLabel = Instance.new("TextLabel")
+	NameLabel.Text = name
+	NameLabel.Size = UDim2.new(1, -10, 0, 30)
+	NameLabel.Position = UDim2.new(0, 5, 0, 100)
+	NameLabel.BackgroundTransparency = 1
+	NameLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+	NameLabel.TextScaled = true
+	NameLabel.Font = Enum.Font.Gotham
+	NameLabel.Parent = Card
+	
+	-- Click Event (The "Try On" Logic)
+	Card.MouseButton1Click:Connect(function()
+		local char = player.Character
+		if char and char:FindFirstChild("Humanoid") then
+			local hum = char.Humanoid
+			local desc = hum:GetAppliedDescription()
+			
+			-- For this demo, we assume the items are Shirts. 
+			-- To make it smart, we would check AssetType, but for brevity:
+			desc.Shirt = assetId 
+			
+			-- Apply to Character
+			hum:ApplyDescription(desc)
+			print("Tried on asset: " .. assetId)
+		end
+	end)
+end
+
+local function loadCatalogItems()
+	-- Parameters: Searching for "Clothing", specifically "Shirts", Sorted by "BestSelling"
+	local searchParams = CatalogSearchParams.new()
+	searchParams.SearchKeyword = ""
+	searchParams.MinPrice = 0
+	searchParams.MaxPrice = 100
+	searchParams.SortType = Enum.CatalogSortType.BestSelling
+	searchParams.AssetTypes = {Enum.AvatarAssetType.Shirt} -- Change this to Pants or TShirt to switch
+	
+	-- Fetch from Roblox API
+	print("Fetching items...")
+	local success, result = pcall(function()
+		return AvatarEditorService:SearchCatalog(searchParams)
+	end)
+	
+	if success then
+		local currentPage = result:GetCurrentPage()
+		for _, item in pairs(currentPage) do
+			createItemCard(item.Id, item.Name)
+		end
+		-- Adjust scrolling size
+		local rowCount = math.ceil(#currentPage / 3)
+		ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, rowCount * 140)
+	else
+		warn("Failed to fetch catalog: " .. tostring(result))
+		local errLabel = Instance.new("TextLabel", ScrollFrame)
+		errLabel.Text = "Failed to load catalog. API access may be restricted in this context."
+		errLabel.Size = UDim2.new(1,0,0,50)
+		errLabel.TextColor3 = Color3.new(1,0,0)
+	end
+end
+
+-- // 3. DRAG LOGIC //
+local dragging, dragInput, dragStart, startPos
+
+local function update(input)
+	local delta = input.Position - dragStart
+	MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
+
+Header.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = true
+		dragStart = input.Position
+		startPos = MainFrame.Position
+		
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				dragging = false
+			end
+		end)
+	end
+end)
+
+Header.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+		dragInput = input
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if input == dragInput and dragging then
+		update(input)
+	end
+end)
+
+-- Toggle Button (Press 'C' to open/close)
+UserInputService.InputBegan:Connect(function(input, gp)
+	if not gp and input.KeyCode == Enum.KeyCode.C then
+		MainFrame.Visible = not MainFrame.Visible
+	end
+end)
+
+CloseBtn.MouseButton1Click:Connect(function()
+	MainFrame.Visible = false
+end)
+
+-- // START //
+loadCatalogItems()
